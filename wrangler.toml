@@ -1,7 +1,12 @@
 name = "condo-manager-ai"
-pages_build_output_dir = "dist"
+compatibility_date = "2024-11-01"
+
+[assets]
+directory = "dist"
 
 [vars]
 # Add environment variables for the frontend if necessary
 VITE_SUPABASE_URL = ""
 VITE_SUPABASE_ANON_KEY = ""
+VITE_GROQ_API_KEY = ""
+VITE_GROQ_MODEL = "openai/gpt-oss-120b"

@@ -22,8 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Build and temporary files
+build_output.txt
+eslint_output.json
+dist/
+node_modules/
 .env
 .env.*
 !.env.example
-node_modules/
-dist/

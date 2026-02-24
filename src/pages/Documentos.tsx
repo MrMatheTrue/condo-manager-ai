@@ -1,9 +1,9 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, ExternalLink, Plus, Search, Trash2, Loader2, Upload, Link as LinkIcon } from "lucide-react";
+import { FileText, Download, ExternalLink, Plus, Search, Trash2, Loader2, Upload, Link as LinkIcon, ArrowLeft, Eye, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -15,10 +15,12 @@ import { ptBR } from "date-fns/locale";
 
 const Documentos = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState("");
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [previewDoc, setPreviewDoc] = useState<any>(null);
 
     // Form states
     const [nome, setNome] = useState("");
@@ -39,12 +41,20 @@ const Documentos = () => {
 
     const uploadMutation = useMutation({
         mutationFn: async () => {
+            if (fonte === "upload" && !file) throw new Error("Selecione um arquivo");
+
             setIsUploading(true);
             let finalUrl = "";
             let size = 0;
             let ext = "";
 
             if (fonte === "upload" && file) {
+                // Restrict to PDF and Images
+                const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+                if (!allowedTypes.includes(file.type)) {
+                    throw new Error("Apenas PDF e Imagens (JPG, PNG, WEBP) são permitidos.");
+                }
+
                 const fileExt = file.name.split('.').pop();
                 const fileName = `${id}/${Math.random()}.${fileExt}`;
                 const { data, error } = await supabase.storage.from("documentos").upload(fileName, file);
@@ -115,9 +125,14 @@ const Documentos = () => {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Documentos</h1>
-                    <p className="text-muted-foreground mt-1">Gestão centralizada de arquivos e links externos.</p>
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full">
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Documentos</h1>
+                        <p className="text-muted-foreground mt-1">Gestão centralizada de arquivos e links externos.</p>
+                    </div>
                 </div>
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogTrigger asChild>
@@ -174,8 +189,9 @@ const Documentos = () => {
 
                             {fonte === "upload" ? (
                                 <div className="space-y-2">
-                                    <Label>Arquivo (PDF, Imagem, Doc)</Label>
-                                    <Input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                                    <Label>Arquivo (Apenas PDF ou Imagem)</Label>
+                                    <Input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                                    <p className="text-[10px] text-muted-foreground italic">Arquivos maiores que 5MB podem demorar a carregar.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-2">
@@ -219,6 +235,11 @@ const Documentos = () => {
                                 </div>
                             </div>
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {doc.fonte === 'upload' && (
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => setPreviewDoc(doc)}>
+                                        <Eye className="h-4 w-4" />
+                                    </Button>
+                                )}
                                 <Button variant="ghost" size="icon" asChild className="h-8 w-8">
                                     <a href={doc.arquivo_url || doc.drive_url} target="_blank" rel="noreferrer">
                                         {doc.fonte === 'upload' ? <Download className="h-4 w-4" /> : <ExternalLink className="h-4 w-4" />}
@@ -240,6 +261,32 @@ const Documentos = () => {
                     </div>
                 )}
             </div>
+
+            {/* Preview Dialog */}
+            <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
+                <DialogContent className="max-w-4xl h-[90vh] p-0 overflow-hidden flex flex-col">
+                    <DialogHeader className="p-4 border-b flex flex-row items-center justify-between">
+                        <DialogTitle className="truncate pr-8">{previewDoc?.nome}</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 bg-muted/20 relative">
+                        {previewDoc?.extensao?.toLowerCase() === 'pdf' ? (
+                            <iframe src={previewDoc?.arquivo_url} className="w-full h-full border-none" title="PDF Preview" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center p-4">
+                                <img src={previewDoc?.arquivo_url} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+                            </div>
+                        )}
+                    </div>
+                    <div className="p-4 border-t flex justify-end gap-2 bg-card">
+                        <Button variant="outline" asChild>
+                            <a href={previewDoc?.arquivo_url} download target="_blank" rel="noreferrer">
+                                <Download className="mr-2 h-4 w-4" /> Baixar
+                            </a>
+                        </Button>
+                        <Button onClick={() => setPreviewDoc(null)}>Fechar</Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

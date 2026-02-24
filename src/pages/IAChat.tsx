@@ -114,14 +114,14 @@ const IAChat = () => {
     <div className="flex flex-col h-[calc(100vh-8rem)] animate-in fade-in duration-500">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => window.history.back()} className="md:hidden">
+          <Button variant="ghost" size="icon" onClick={() => window.history.back()} className="rounded-full">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Sparkles className="h-8 w-8 text-primary animate-pulse" /> Assistente IA
+              <Bot className="h-8 w-8 text-primary" /> Assistente IA
             </h1>
-            <p className="text-muted-foreground mt-1">Crie obrigações e consulte dados via chat no <strong>{condo?.nome}</strong>.</p>
+            <p className="text-muted-foreground mt-1 text-sm">Crie obrigações e consulte dados via chat no <strong>{condo?.nome}</strong>.</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => setMessages([])} className="hidden md:flex">
@@ -132,7 +132,7 @@ const IAChat = () => {
       <Card className="flex-1 flex flex-col border-none shadow-xl bg-card/50 backdrop-blur-md overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/50" />
 
-        <ScrollArea className="flex-1 p-4 md:p-6 h-full" viewportRef={scrollRef}>
+        <ScrollArea className="flex-1 p-4 md:p-6 h-full">
           <div className="space-y-6 max-w-4xl mx-auto pb-4">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">

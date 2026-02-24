@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Circle, Clock, Camera, Plus, History, Settings, Loader2, Image as ImageIcon } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Camera, Plus, History, Settings, Loader2, Image as ImageIcon, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -17,6 +17,7 @@ import { ptBR } from "date-fns/locale";
 
 const CheckIn = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -46,7 +47,12 @@ const CheckIn = () => {
     const { data: execucoes, isLoading: loadingExecs } = useQuery({
         queryKey: ["execucoes-all", id],
         queryFn: async () => {
-            const { data, error } = await supabase.from("execucoes_checkin").select("*, executado_por_alias:profiles(full_name)").eq("condominio_id", id).order("data_execucao", { ascending: false });
+            // Correcting join for profiles
+            const { data, error } = await supabase
+                .from("execucoes_checkin")
+                .select("*, profile:profiles(full_name)")
+                .eq("condominio_id", id)
+                .order("data_execucao", { ascending: false });
             if (error) throw error;
             return data;
         },
@@ -56,10 +62,10 @@ const CheckIn = () => {
         mutationFn: async () => {
             const { data: { user } } = await supabase.auth.getUser();
             const { error } = await supabase.from("tarefas_checkin").insert({
-                condominio_id: id,
+                condominio_id: id as string,
                 titulo,
                 descricao,
-                frequencia,
+                frequencia: frequencia as any,
                 horario_previsto: horario || null,
                 criado_por: user?.id
             });
@@ -90,11 +96,11 @@ const CheckIn = () => {
 
             const { error } = await supabase.from("execucoes_checkin").insert({
                 tarefa_id: selectedTarefa.id,
-                condominio_id: id,
+                condominio_id: id as string,
                 executado_por: user?.id,
-                status: 'concluida',
+                status: 'concluida' as any,
                 observacao: obs,
-                fotos_urls: fotoUrl ? [fotoUrl] : []
+                fotos_urls: (fotoUrl ? [fotoUrl] : []) as any
             });
             if (error) throw error;
         },
@@ -117,9 +123,14 @@ const CheckIn = () => {
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-20 md:pb-0">
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Check-in Operacional</h1>
-                    <p className="text-muted-foreground mt-1 text-sm md:text-base">Controle de rondas e tarefas diárias da equipe.</p>
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full">
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Check-in Operacional</h1>
+                        <p className="text-muted-foreground mt-1 text-sm md:text-base">Controle de rondas e tarefas diárias da equipe.</p>
+                    </div>
                 </div>
             </div>
 
@@ -242,11 +253,11 @@ const CheckIn = () => {
                                                 <div>
                                                     <p className="text-sm font-bold">{tarefas?.find(t => t.id === e.tarefa_id)?.titulo}</p>
                                                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
-                                                        {format(new Date(e.data_execucao), "dd/MM/yyyy HH:mm", { locale: ptBR })} · {e.executado_por_alias?.full_name || "Membro da Equipe"}
+                                                        {format(new Date(e.data_execucao), "dd/MM/yyyy HH:mm", { locale: ptBR })} · {(e.profile as any)?.full_name || "Membro da Equipe"}
                                                     </p>
                                                 </div>
                                             </div>
-                                            {e.fotos_urls?.length > 0 && <ImageIcon className="h-4 w-4 text-primary" />}
+                                            {(e.fotos_urls as any[])?.length > 0 && <ImageIcon className="h-4 w-4 text-primary" />}
                                         </div>
                                         {e.observacao && (
                                             <div className="px-4 pb-4 text-xs italic text-muted-foreground border-t pt-2 bg-muted/10">

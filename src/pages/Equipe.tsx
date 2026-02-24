@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, UserPlus, Shield, Mail, Trash2, ShieldAlert, Loader2, CheckCircle2 } from "lucide-react";
+import { Users, UserPlus, Shield, Mail, Trash2, ShieldAlert, Loader2, CheckCircle2, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 
@@ -22,6 +22,7 @@ const modulesList = [
 
 const Equipe = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -35,6 +36,7 @@ const Equipe = () => {
     const { data: equipe, isLoading } = useQuery({
         queryKey: ["equipe", id],
         queryFn: async () => {
+            // Correcting join for profiles
             const { data, error } = await supabase
                 .from("condominio_acessos")
                 .select("*, profile:profiles(full_name, email, avatar_url, role)")
@@ -46,7 +48,6 @@ const Equipe = () => {
 
     const addMembroMutation = useMutation({
         mutationFn: async () => {
-            // First find the user by email in profiles
             const { data: profile, error: findError } = await supabase
                 .from("profiles")
                 .select("id")
@@ -58,10 +59,10 @@ const Equipe = () => {
             }
 
             const { error } = await supabase.from("condominio_acessos").insert({
-                condominio_id: id,
+                condominio_id: id as string,
                 user_id: profile.id,
-                nivel_acesso: acesso,
-                modulos_permitidos: permitidos
+                nivel_acesso: acesso as any,
+                modulos_permitidos: permitidos as any
             });
             if (error) throw error;
         },
@@ -101,9 +102,14 @@ const Equipe = () => {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Equipe & Acessos</h1>
-                    <p className="text-muted-foreground mt-1">Delegue tarefas e controle quem pode ver cada módulo.</p>
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full">
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Equipe & Acessos</h1>
+                        <p className="text-muted-foreground mt-1">Delegue tarefas e controle quem pode ver cada módulo.</p>
+                    </div>
                 </div>
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogTrigger asChild>
@@ -166,14 +172,14 @@ const Equipe = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <p className="font-bold text-lg">{mem.profile?.full_name || "Membro da Equipe"}</p>
-                                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase">{mem.profile?.role}</span>
+                                    <p className="font-bold text-lg">{(mem.profile as any)?.full_name || "Membro da Equipe"}</p>
+                                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase">{(mem.profile as any)?.role}</span>
                                 </div>
                                 <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
-                                    <Mail className="h-3.5 w-3.5" /> {mem.profile?.email}
+                                    <Mail className="h-3.5 w-3.5" /> {(mem.profile as any)?.email}
                                 </p>
                                 <div className="flex flex-wrap gap-1 mt-3">
-                                    {mem.modulos_permitidos?.map((mId: string) => (
+                                    {(mem.modulos_permitidos as string[])?.map((mId: string) => (
                                         <span key={mId} className="text-[9px] px-1.5 py-0.5 rounded bg-muted font-bold text-muted-foreground uppercase tracking-tighter">
                                             {modulesList.find(ml => ml.id === mId)?.label || mId}
                                         </span>

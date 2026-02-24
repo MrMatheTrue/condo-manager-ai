@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, CheckCircle, Calendar as CalendarIcon, AlertCircle, Edit, Trash2, Loader2, Info } from "lucide-react";
+import { Plus, CheckCircle, Calendar as CalendarIcon, AlertCircle, Edit, Trash2, Loader2, Info, ArrowLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,11 +53,11 @@ const Obrigacoes = () => {
                 data_ultima_realizacao: dataUltima || null,
                 data_proxima_realizacao: nextDate.toISOString().split('T')[0],
                 periodicidade_dias: parseInt(periodicidade),
-                criticidade,
+                criticidade: criticidade as any,
                 dias_alerta_antecipado: parseInt(alerta),
                 responsavel_nome: responsavel,
                 observacoes: obs,
-                status: 'em_dia'
+                status: 'em_dia' as any
             };
 
             const { error } = await supabase.from("obrigacoes").insert(payload);
@@ -112,9 +112,14 @@ const Obrigacoes = () => {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Obrigações</h1>
-                    <p className="text-muted-foreground mt-1">Manutenção preventiva e prazos legais do condomínio.</p>
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => window.history.back()} className="rounded-full">
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Obrigações</h1>
+                        <p className="text-muted-foreground mt-1">Manutenção preventiva e prazos legais do condomínio.</p>
+                    </div>
                 </div>
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogTrigger asChild>
@@ -200,15 +205,15 @@ const Obrigacoes = () => {
                                     <TableCell className="text-sm font-medium">{formatDateBR(o.data_proxima_realizacao)}</TableCell>
                                     <TableCell>
                                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${o.criticidade === 'critica' ? 'bg-red-500/10 text-red-600 border-red-200' :
-                                                o.criticidade === 'alta' ? 'bg-orange-500/10 text-orange-600 border-orange-200' :
-                                                    'bg-blue-500/10 text-blue-600 border-blue-200'
+                                            o.criticidade === 'alta' ? 'bg-orange-500/10 text-orange-600 border-orange-200' :
+                                                'bg-blue-500/10 text-blue-600 border-blue-200'
                                             }`}>
                                             {o.criticidade}
                                         </span>
                                     </TableCell>
                                     <TableCell>
                                         <div className={`flex items-center gap-1.5 text-xs font-bold ${o.status === "vencida" ? "text-red-500" :
-                                                o.status === "atencao" ? "text-orange-500" : "text-emerald-500"
+                                            o.status === "atencao" ? "text-orange-500" : "text-emerald-500"
                                             }`}>
                                             {o.status === 'vencida' ? <AlertCircle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
                                             {o.status.replace('_', ' ').toUpperCase()}

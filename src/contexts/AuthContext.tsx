@@ -41,12 +41,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, phone, avatar_url, role")
-      .eq("id", userId)
-      .single();
-    if (data) setProfile(data as Profile);
+    try {
+      // First attempt: fetch with role column
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, phone, avatar_url, role")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching profile with role:", error);
+
+        // If error suggests column missing, try without it
+        if (error.message.includes("role") || error.code === "PGRST204") {
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from("profiles")
+            .select("id, full_name, email, phone, avatar_url")
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (fallbackData) {
+            setProfile({ ...fallbackData, role: "sindico" } as Profile);
+            return;
+          }
+          if (fallbackError) console.error("Fallback profile fetch failed:", fallbackError);
+        }
+      } else if (data) {
+        setProfile(data as Profile);
+      }
+    } catch (err) {
+      console.error("Unexpected error in fetchProfile:", err);
+    }
   };
 
   const refreshProfile = async () => {
@@ -60,7 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (_event, session) => {
         setSession(session);
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          try {
+            await fetchProfile(session.user.id);
+          } catch (e) {
+            console.error("onAuthStateChange profile fetch error:", e);
+          }
         } else {
           setProfile(null);
         }

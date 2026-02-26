@@ -1,7 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || "llama-3.3-70b-versatile";
+
+// ✅ FIX: "openai/gpt-oss-120b" não existe no Groq → causa loop eterno.
+// Detectamos modelos inválidos e forçamos fallback para um modelo válido.
+const MODELOS_INVALIDOS = ["openai/", "gpt-4", "gpt-3.5"];
+const RAW_MODEL = import.meta.env.VITE_GROQ_MODEL || "";
+export const GROQ_MODEL = MODELOS_INVALIDOS.some(m => RAW_MODEL.startsWith(m))
+    ? "llama-3.3-70b-versatile"
+    : (RAW_MODEL || "llama-3.3-70b-versatile");
 
 export interface ChatMessage {
     role: "system" | "user" | "assistant" | "tool";

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Circle, Clock, Camera, Plus, History, Settings, Loader2, Image as ImageIcon, ArrowLeft, X } from "lucide-react";
+import { CheckCircle2, Circle, Camera, Plus, Loader2, ArrowLeft, X, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useRef } from "react";
 import { format } from "date-fns";
@@ -18,6 +18,116 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const MAX_PHOTOS = 3;
 
+// ── Formulário de criação de tarefa (extraído para evitar erros com early return) ─
+interface CreateFormProps {
+    titulo: string; setTitulo: (v: string) => void;
+    descricao: string; setDescricao: (v: string) => void;
+    frequencia: string; setFrequencia: (v: string) => void;
+    horario: string; setHorario: (v: string) => void;
+    onSave: () => void;
+    onCancel: () => void;
+    loading: boolean;
+}
+
+function CreateTarefaForm({
+    titulo, setTitulo, descricao, setDescricao,
+    frequencia, setFrequencia, horario, setHorario,
+    onSave, onCancel, loading
+}: CreateFormProps) {
+    return (
+        <>
+            <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                    <Label>Título *</Label>
+                    <Input placeholder="Ex: Verificação de extintores" value={titulo}
+                        onChange={e => setTitulo(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                    <Label>Descrição</Label>
+                    <Textarea placeholder="Detalhes da tarefa..." value={descricao}
+                        onChange={e => setDescricao(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>Frequência</Label>
+                        <Select value={frequencia} onValueChange={setFrequencia}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="diaria">Diária</SelectItem>
+                                <SelectItem value="semanal">Semanal</SelectItem>
+                                <SelectItem value="mensal">Mensal</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Horário previsto</Label>
+                        <Input type="time" value={horario} onChange={e => setHorario(e.target.value)} />
+                    </div>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+                <Button onClick={onSave} disabled={!titulo || loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Criar Tarefa
+                </Button>
+            </DialogFooter>
+        </>
+    );
+}
+
+// ── Sub-componente: lista de tarefas do dia ──────────────────────────────────
+function TarefasHoje({ tarefas, execucoes, today, onRegistrar }: {
+    tarefas: any[];
+    execucoes: any[] | undefined;
+    today: string;
+    onRegistrar: (t: any) => void;
+}) {
+    if (tarefas.length === 0) return (
+        <div className="text-center py-20 border-2 border-dashed rounded-2xl bg-muted/20">
+            <CheckCircle2 className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+            <p className="font-bold">Nenhuma tarefa ativa</p>
+            <p className="text-sm text-muted-foreground mt-1">O síndico ainda não criou tarefas para este condomínio.</p>
+        </div>
+    );
+
+    return (
+        <div className="grid gap-4">
+            {tarefas.map(tarefa => {
+                const done = execucoes?.some(e =>
+                    e.tarefa_id === tarefa.id &&
+                    typeof e.data_execucao === "string" &&
+                    e.data_execucao.startsWith(today)
+                );
+                return (
+                    <Card key={tarefa.id} className={`border-none shadow-sm transition-all ${done ? "bg-success/5 opacity-80" : "bg-card/60"}`}>
+                        <CardContent className="p-4 md:p-6 flex items-center gap-4">
+                            <div className={`p-3 rounded-2xl ${done ? "bg-success/20 text-success" : "bg-primary/10 text-primary"}`}>
+                                {done ? <CheckCircle2 className="h-8 w-8" /> : <Circle className="h-8 w-8" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className={`text-lg font-bold truncate ${done ? "line-through text-muted-foreground" : ""}`}>
+                                    {tarefa.titulo}
+                                </p>
+                                {tarefa.descricao && <p className="text-sm text-muted-foreground truncate">{tarefa.descricao}</p>}
+                                {tarefa.horario_previsto && (
+                                    <p className="text-xs text-muted-foreground mt-1">Previsto: {tarefa.horario_previsto}</p>
+                                )}
+                            </div>
+                            {!done && (
+                                <Button size="sm" className="shrink-0 font-bold" onClick={() => onRegistrar(tarefa)}>
+                                    <Camera className="mr-2 h-4 w-4" /> Registrar
+                                </Button>
+                            )}
+                        </CardContent>
+                    </Card>
+                );
+            })}
+        </div>
+    );
+}
+
+// ── CheckIn principal ─────────────────────────────────────────────────────────
 const CheckIn = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -28,39 +138,47 @@ const CheckIn = () => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isCaptureOpen, setIsCaptureOpen] = useState(false);
     const [selectedTarefa, setSelectedTarefa] = useState<any>(null);
-
-    // Task creation states
     const [titulo, setTitulo] = useState("");
     const [descricao, setDescricao] = useState("");
     const [frequencia, setFrequencia] = useState("diaria");
     const [horario, setHorario] = useState("");
-
-    // Execution states
     const [obs, setObs] = useState("");
     const [files, setFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const { data: tarefas, isLoading: loadingTarefas } = useQuery({
+    // ✅ FIX: Selecionamos colunas explicitamente — sem join em "profiles"
+    // O join profile:profiles(full_name) causava erro 400 por restrição do RLS → loop eterno de loading
+    const { data: tarefas, isLoading: loadingTarefas, isError: erroTarefas } = useQuery({
         queryKey: ["tarefas-checkin", id],
         queryFn: async () => {
-            const { data, error } = await supabase.from("tarefas_checkin").select("*").eq("condominio_id", id).order("created_at", { ascending: false });
+            const { data, error } = await supabase
+                .from("tarefas_checkin")
+                .select("id, titulo, descricao, frequencia, horario_previsto, status_ativo, condominio_id, criado_por, created_at")
+                .eq("condominio_id", id)
+                .order("created_at", { ascending: false });
             if (error) throw error;
-            return data;
+            return data ?? [];
         },
+        retry: 1,
+        enabled: !!id,
     });
 
-    const { data: execucoes, isLoading: loadingExecs } = useQuery({
+    // ✅ FIX CRÍTICO: Removido "profile:profiles(full_name)" do select de execucoes_checkin.
+    // Esse join disparava uma query em profiles bloqueada pelo RLS → retornava 400 → loop eterno.
+    const { data: execucoes, isLoading: loadingExecs, isError: erroExecs } = useQuery({
         queryKey: ["execucoes-all", id],
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("execucoes_checkin")
-                .select("*, profile:profiles(full_name)")
+                .select("id, tarefa_id, condominio_id, executado_por, data_execucao, status, observacao, fotos_urls")
                 .eq("condominio_id", id)
                 .order("data_execucao", { ascending: false });
             if (error) throw error;
-            return data;
+            return data ?? [];
         },
+        retry: 1,
+        enabled: !!id,
     });
 
     const createTarefaMutation = useMutation({
@@ -68,11 +186,11 @@ const CheckIn = () => {
             const { data: { user } } = await supabase.auth.getUser();
             const { error } = await supabase.from("tarefas_checkin").insert({
                 condominio_id: id as string,
-                titulo,
-                descricao,
+                titulo, descricao,
                 frequencia: frequencia as any,
                 horario_previsto: horario || null,
-                criado_por: user?.id
+                status_ativo: true,
+                criado_por: user?.id,
             });
             if (error) throw error;
         },
@@ -80,20 +198,43 @@ const CheckIn = () => {
             queryClient.invalidateQueries({ queryKey: ["tarefas-checkin", id] });
             setIsCreateOpen(false);
             setTitulo(""); setDescricao("");
-            toast({ title: "Tarefa agendada!" });
-        }
+            toast({ title: "Tarefa criada!" });
+        },
+        onError: (err: any) => toast({ variant: "destructive", title: "Erro ao criar tarefa", description: err.message }),
     });
 
-    const completeTarefaMutation = useMutation({
+    const toggleMutation = useMutation({
+        mutationFn: async ({ tarefaId, ativo }: { tarefaId: string; ativo: boolean }) => {
+            const { error } = await supabase.from("tarefas_checkin")
+                .update({ status_ativo: ativo }).eq("id", tarefaId);
+            if (error) throw error;
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tarefas-checkin", id] }),
+        onError: (err: any) => toast({ variant: "destructive", title: "Erro", description: err.message }),
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: async (tarefaId: string) => {
+            const { error } = await supabase.from("tarefas_checkin").delete().eq("id", tarefaId);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["tarefas-checkin", id] });
+            toast({ title: "Tarefa removida." });
+        },
+        onError: (err: any) => toast({ variant: "destructive", title: "Erro", description: err.message }),
+    });
+
+    const completeMutation = useMutation({
         mutationFn: async () => {
             setIsUploading(true);
             const { data: { user } } = await supabase.auth.getUser();
             const fotosUrls: string[] = [];
 
             for (const file of files) {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                const { data, error } = await supabase.storage.from("fotos-checkin").upload(fileName, file);
+                const ext = file.name.split(".").pop();
+                const name = `${id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+                const { data, error } = await supabase.storage.from("fotos-checkin").upload(name, file);
                 if (error) throw error;
                 const { data: { publicUrl } } = supabase.storage.from("fotos-checkin").getPublicUrl(data.path);
                 fotosUrls.push(publicUrl);
@@ -103,9 +244,9 @@ const CheckIn = () => {
                 tarefa_id: selectedTarefa.id,
                 condominio_id: id as string,
                 executado_por: user?.id,
-                status: 'concluida' as any,
+                status: "concluida" as any,
                 observacao: obs,
-                fotos_urls: fotosUrls as any
+                fotos_urls: fotosUrls as any,
             });
             if (error) throw error;
         },
@@ -113,27 +254,24 @@ const CheckIn = () => {
             queryClient.invalidateQueries({ queryKey: ["execucoes-all", id] });
             setIsCaptureOpen(false);
             setObs(""); setFiles([]);
-            toast({ title: "Check-in realizado!", description: "A execução foi registrada com sucesso." });
+            toast({ title: "Check-in registrado!" });
         },
-        onError: (err: any) => toast({ variant: "destructive", title: "Erro", description: err.message }),
-        onSettled: () => setIsUploading(false)
+        onError: (err: any) => toast({ variant: "destructive", title: "Erro ao registrar", description: err.message }),
+        onSettled: () => setIsUploading(false),
     });
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newFiles = Array.from(e.target.files || []);
+        const added = Array.from(e.target.files || []);
         setFiles(prev => {
-            const combined = [...prev, ...newFiles];
-            if (combined.length > MAX_PHOTOS) {
-                toast({ variant: "destructive", title: `Máximo de ${MAX_PHOTOS} fotos`, description: "Remova uma foto antes de adicionar outra." });
+            const all = [...prev, ...added];
+            if (all.length > MAX_PHOTOS) {
+                toast({ variant: "destructive", title: `Máximo ${MAX_PHOTOS} fotos por execução` });
                 return prev;
             }
-            return combined;
+            return all;
         });
-        // Reset input so same file can be picked again if needed
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
-
-    const removeFile = (idx: number) => setFiles(prev => prev.filter((_, i) => i !== idx));
 
     if (loadingTarefas || loadingExecs) return (
         <div className="flex flex-col items-center justify-center p-20 gap-4">
@@ -142,53 +280,156 @@ const CheckIn = () => {
         </div>
     );
 
-    const today = new Date().toISOString().split('T')[0];
+    if (erroTarefas || erroExecs) return (
+        <div className="p-8 text-center space-y-4">
+            <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+            <p className="font-bold text-destructive">Erro ao carregar dados do check-in.</p>
+            <p className="text-sm text-muted-foreground">Recarregue a página ou verifique sua conexão.</p>
+            <Button variant="outline" onClick={() => navigate(-1)}>Voltar</Button>
+        </div>
+    );
+
+    const today = new Date().toISOString().split("T")[0];
+    const tarefasAtivas = (tarefas ?? []).filter(t => t.status_ativo !== false);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-20 md:pb-0">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Check-in Operacional</h1>
-                        <p className="text-muted-foreground mt-1 text-sm md:text-base">Controle de rondas e tarefas diárias da equipe.</p>
-                    </div>
+            {/* Header */}
+            <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full">
+                    <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Check-in Operacional</h1>
+                    <p className="text-muted-foreground mt-1 text-sm">Controle de rondas e tarefas diárias da equipe.</p>
                 </div>
             </div>
 
-            {/* Síndico sees both tabs; colaborador sees only execution */}
             {isSindico ? (
                 <Tabs defaultValue="execucao" className="w-full">
                     <TabsList className="grid w-full grid-cols-2 mb-8 h-12 bg-muted/50 p-1">
-                        <TabsTrigger value="execucao" className="font-bold border-none data-[state=active]:shadow-md">Execução Hoje</TabsTrigger>
-                        <TabsTrigger value="gestao" className="font-bold border-none data-[state=active]:shadow-md">Gestão & Histórico</TabsTrigger>
+                        <TabsTrigger value="execucao" className="font-bold">Execução Hoje</TabsTrigger>
+                        <TabsTrigger value="gestao" className="font-bold">Gestão & Histórico</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="execucao" className="outline-none">
-                        <ExecucaoHoje tarefas={tarefas} execucoes={execucoes} today={today} onRegistrar={(t) => { setSelectedTarefa(t); setIsCaptureOpen(true); }} />
-                    </TabsContent>
-                    <TabsContent value="gestao" className="space-y-8 outline-none">
-                        <GestaoHistorico
-                            tarefas={tarefas}
+                    <TabsContent value="execucao">
+                        <TarefasHoje
+                            tarefas={tarefasAtivas}
                             execucoes={execucoes}
-                            isCreateOpen={isCreateOpen}
-                            setIsCreateOpen={setIsCreateOpen}
-                            titulo={titulo} setTitulo={setTitulo}
-                            descricao={descricao} setDescricao={setDescricao}
-                            frequencia={frequencia} setFrequencia={setFrequencia}
-                            horario={horario} setHorario={setHorario}
-                            onSave={() => createTarefaMutation.mutate()}
+                            today={today}
+                            onRegistrar={t => { setSelectedTarefa(t); setIsCaptureOpen(true); }}
                         />
+                    </TabsContent>
+                    <TabsContent value="gestao" className="space-y-8">
+                        {/* Criar tarefa */}
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-xl font-bold">Tarefas Cadastradas</h2>
+                            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                                <DialogTrigger asChild>
+                                    <Button className="font-bold">
+                                        <Plus className="mr-2 h-4 w-4" /> Nova Tarefa
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[440px]">
+                                    <DialogHeader><DialogTitle>Nova Tarefa Operacional</DialogTitle></DialogHeader>
+                                    <CreateTarefaForm
+                                        titulo={titulo} setTitulo={setTitulo}
+                                        descricao={descricao} setDescricao={setDescricao}
+                                        frequencia={frequencia} setFrequencia={setFrequencia}
+                                        horario={horario} setHorario={setHorario}
+                                        onSave={() => createTarefaMutation.mutate()}
+                                        onCancel={() => setIsCreateOpen(false)}
+                                        loading={createTarefaMutation.isPending}
+                                    />
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+
+                        {/* Lista de tarefas */}
+                        {(tarefas?.length ?? 0) === 0 ? (
+                            <div className="text-center py-12 border-2 border-dashed rounded-2xl bg-muted/20">
+                                <p className="font-bold text-muted-foreground">Nenhuma tarefa criada ainda.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {tarefas?.map(t => {
+                                    const last = execucoes?.find(e => e.tarefa_id === t.id);
+                                    return (
+                                        <Card key={t.id} className="border-none shadow-sm bg-card/60">
+                                            <CardContent className="p-4 flex items-center gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`font-bold truncate ${!t.status_ativo ? "line-through text-muted-foreground" : ""}`}>
+                                                        {t.titulo}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground capitalize">
+                                                        {t.frequencia}{t.horario_previsto ? ` · ${t.horario_previsto}` : ""}
+                                                        {last ? ` · Última: ${format(new Date(last.data_execucao), "dd/MM HH:mm", { locale: ptBR })}` : ""}
+                                                    </p>
+                                                </div>
+                                                <div className="flex gap-2 shrink-0">
+                                                    <Button variant="outline" size="sm" className="text-xs"
+                                                        onClick={() => toggleMutation.mutate({ tarefaId: t.id, ativo: !t.status_ativo })}>
+                                                        {t.status_ativo ? "Desativar" : "Ativar"}
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10"
+                                                        onClick={() => deleteMutation.mutate(t.id)}>
+                                                        Excluir
+                                                    </Button>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Histórico */}
+                        {(execucoes?.length ?? 0) > 0 && (
+                            <div className="space-y-3">
+                                <h2 className="text-xl font-bold">Histórico de Execuções</h2>
+                                {execucoes?.slice(0, 20).map(e => {
+                                    const tarefa = tarefas?.find(t => t.id === e.tarefa_id);
+                                    const fotos: string[] = Array.isArray(e.fotos_urls) ? e.fotos_urls : [];
+                                    return (
+                                        <Card key={e.id} className="border-none shadow-sm bg-card/60">
+                                            <CardContent className="p-4 flex items-start gap-3">
+                                                <div className={`p-2 rounded-xl shrink-0 ${e.status === "concluida" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
+                                                    <CheckCircle2 className="h-5 w-5" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold text-sm">{tarefa?.titulo ?? "Tarefa removida"}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {format(new Date(e.data_execucao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                    </p>
+                                                    {e.observacao && <p className="text-xs text-muted-foreground mt-1 italic">"{e.observacao}"</p>}
+                                                    {fotos.length > 0 && (
+                                                        <div className="flex gap-1 mt-2">
+                                                            {fotos.slice(0, 3).map((url, i) => (
+                                                                <a href={url} target="_blank" rel="noreferrer" key={i}>
+                                                                    <img src={url} alt="" className="h-12 w-12 rounded-lg object-cover border" />
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </TabsContent>
                 </Tabs>
             ) : (
-                /* Colaborador — only Execução Hoje */
-                <ExecucaoHoje tarefas={tarefas} execucoes={execucoes} today={today} onRegistrar={(t) => { setSelectedTarefa(t); setIsCaptureOpen(true); }} />
+                <TarefasHoje
+                    tarefas={tarefasAtivas}
+                    execucoes={execucoes}
+                    today={today}
+                    onRegistrar={t => { setSelectedTarefa(t); setIsCaptureOpen(true); }}
+                />
             )}
 
-            {/* Modal de Execução (Capture) — até 3 fotos */}
-            <Dialog open={isCaptureOpen} onOpenChange={(open) => { setIsCaptureOpen(open); if (!open) { setObs(""); setFiles([]); } }}>
+            {/* Modal de execução */}
+            <Dialog open={isCaptureOpen} onOpenChange={open => { setIsCaptureOpen(open); if (!open) { setObs(""); setFiles([]); } }}>
                 <DialogContent className="sm:max-w-[440px]">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -200,65 +441,44 @@ const CheckIn = () => {
                             {selectedTarefa?.titulo}
                         </div>
                         <div className="space-y-2">
-                            <Label>Observação (Opcional)</Label>
-                            <Textarea placeholder="Alguma anormalidade ou detalhe?" value={obs} onChange={(e) => setObs(e.target.value)} />
+                            <Label>Observação (opcional)</Label>
+                            <Textarea placeholder="Alguma anormalidade?" value={obs} onChange={e => setObs(e.target.value)} />
                         </div>
                         <div className="space-y-2">
-                            <Label className="flex items-center justify-between">
-                                <span>Fotos da Execução <span className="text-muted-foreground font-normal">(até 3)</span></span>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${files.length >= MAX_PHOTOS ? 'bg-amber-500/10 text-amber-600' : 'bg-muted text-muted-foreground'}`}>
-                                    {files.length}/{MAX_PHOTOS}
-                                </span>
-                            </Label>
-
-                            {/* Preview fotos selecionadas */}
-                            {files.length > 0 && (
-                                <div className="grid grid-cols-3 gap-2">
-                                    {files.map((f, idx) => (
-                                        <div key={idx} className="relative rounded-lg overflow-hidden border aspect-square bg-muted">
-                                            <img
-                                                src={URL.createObjectURL(f)}
-                                                alt={`foto-${idx + 1}`}
-                                                className="w-full h-full object-cover"
-                                            />
-                                            <button
-                                                onClick={() => removeFile(idx)}
-                                                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive text-white flex items-center justify-center shadow-md hover:bg-destructive/80"
-                                            >
-                                                <X className="h-3 w-3" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {files.length < MAX_PHOTOS && (
-                                <div className="relative border-2 border-dashed rounded-xl p-6 flex flex-col items-center gap-2 hover:bg-muted/50 transition-colors cursor-pointer">
-                                    <Input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                        onChange={handleFileChange}
-                                        accept="image/*"
-                                        capture="environment"
-                                        multiple
-                                    />
-                                    <ImageIcon className="h-7 w-7 text-muted-foreground" />
-                                    <p className="text-xs font-bold text-muted-foreground">
-                                        {files.length === 0 ? "Toque para tirar/selecionar foto" : "Adicionar mais foto"}
-                                    </p>
-                                </div>
-                            )}
+                            <Label>Fotos (máx. {MAX_PHOTOS})</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {files.map((f, i) => (
+                                    <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-muted border">
+                                        <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover" />
+                                        <button
+                                            className="absolute top-1 right-1 h-5 w-5 bg-black/60 rounded-full flex items-center justify-center"
+                                            onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}
+                                        >
+                                            <X className="h-3 w-3 text-white" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {files.length < MAX_PHOTOS && (
+                                    <button
+                                        className="aspect-square rounded-lg border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-1 hover:border-primary/60 transition-colors"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <Camera className="h-6 w-6 text-primary/50" />
+                                        <p className="text-[10px] text-muted-foreground">Adicionar foto</p>
+                                    </button>
+                                )}
+                            </div>
+                            <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+                                multiple className="hidden" onChange={handleFileChange} />
                         </div>
                     </div>
                     <DialogFooter className="gap-2">
                         <Button variant="outline" className="flex-1" onClick={() => setIsCaptureOpen(false)}>Cancelar</Button>
-                        <Button
-                            className="flex-1 font-bold h-11"
-                            onClick={() => completeTarefaMutation.mutate()}
-                            disabled={isUploading || files.length === 0}
-                        >
-                            {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Finalizar Check-in"}
+                        <Button className="flex-1 font-bold h-11"
+                            onClick={() => completeMutation.mutate()}
+                            disabled={isUploading}>
+                            {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Finalizar Check-in
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -266,149 +486,5 @@ const CheckIn = () => {
         </div>
     );
 };
-
-// ── Sub-components ──────────────────────────────────────────────────────────
-
-function ExecucaoHoje({ tarefas, execucoes, today, onRegistrar }: {
-    tarefas: any[] | undefined;
-    execucoes: any[] | undefined;
-    today: string;
-    onRegistrar: (t: any) => void;
-}) {
-    return (
-        <div className="grid gap-4">
-            {tarefas?.filter(t => t.status_ativo).map((tarefa) => {
-                const foiExecutadaHoje = execucoes?.some(e => e.tarefa_id === tarefa.id && e.data_execucao.startsWith(today));
-                return (
-                    <Card key={tarefa.id} className={`group border-none shadow-sm transition-all duration-300 ${foiExecutadaHoje ? 'bg-success/5 opacity-80' : 'bg-card/60 backdrop-blur-sm'}`}>
-                        <CardContent className="p-4 md:p-6 flex items-center gap-4">
-                            <div className={`p-3 rounded-2xl ${foiExecutadaHoje ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'}`}>
-                                {foiExecutadaHoje ? <CheckCircle2 className="h-8 w-8" /> : <Circle className="h-8 w-8" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className={`text-lg font-bold truncate ${foiExecutadaHoje ? 'text-success/70 line-through' : 'text-foreground'}`}>{tarefa.titulo}</p>
-                                <div className="flex items-center gap-3 mt-1 text-xs font-medium text-muted-foreground">
-                                    <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {tarefa.horario_previsto || "Livre"}</span>
-                                    <span className="uppercase tracking-widest px-1.5 py-0.5 rounded bg-muted/50">{tarefa.frequencia}</span>
-                                </div>
-                            </div>
-                            {!foiExecutadaHoje && (
-                                <Button className="shadow-md bg-primary hover:bg-primary/90 font-bold px-6" onClick={() => onRegistrar(tarefa)}>
-                                    <Camera className="mr-2 h-4 w-4" /> Registrar
-                                </Button>
-                            )}
-                        </CardContent>
-                    </Card>
-                );
-            })}
-            {(tarefas?.filter(t => t.status_ativo).length === 0 || tarefas?.length === 0) && (
-                <div className="text-center py-20 border-2 border-dashed rounded-3xl bg-muted/20">
-                    <Settings className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
-                    <h3 className="text-lg font-bold uppercase tracking-tight">Nenhuma tarefa ativa</h3>
-                    <p className="text-muted-foreground text-sm">O síndico deve criar tarefas na aba Gestão.</p>
-                </div>
-            )}
-        </div>
-    );
-}
-
-function GestaoHistorico({ tarefas, execucoes, isCreateOpen, setIsCreateOpen, titulo, setTitulo, descricao, setDescricao, frequencia, setFrequencia, horario, setHorario, onSave }: any) {
-    return (
-        <>
-            <div className="flex justify-between items-center px-1">
-                <h2 className="text-xl font-bold flex items-center gap-2"><Settings className="h-5 w-5" /> Configuração do Roteiro</h2>
-                <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                    <DialogTrigger asChild>
-                        <Button size="sm" className="font-bold"><Plus className="h-4 w-4 mr-2" /> Nova Tarefa</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader><DialogTitle>Criar Nova Tarefa Operacional</DialogTitle></DialogHeader>
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label>Título da Tarefa</Label>
-                                <Input placeholder="Ex: Verificação de Bomba de Recalque" value={titulo} onChange={(e) => setTitulo(e.target.value)} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Descrição / Instruções</Label>
-                                <Textarea placeholder="Passo a passo para o colaborador..." value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Frequência</Label>
-                                    <Select value={frequencia} onValueChange={setFrequencia}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="diaria">Diária</SelectItem>
-                                            <SelectItem value="semanal">Semanal</SelectItem>
-                                            <SelectItem value="mensal">Mensal</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Horário Previsto</Label>
-                                    <Input type="time" value={horario} onChange={(e) => setHorario(e.target.value)} />
-                                </div>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-                            <Button onClick={onSave} disabled={!titulo}>Salvar Roteiro</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            <div className="grid gap-4">
-                {tarefas?.map((t: any) => (
-                    <Card key={t.id} className="border-none bg-muted/30 shadow-sm">
-                        <CardContent className="p-4 flex items-center justify-between">
-                            <div>
-                                <p className="font-bold">{t.titulo}</p>
-                                <p className="text-xs text-muted-foreground">{t.frequencia} · {t.horario_previsto || "Qualquer horário"}</p>
-                            </div>
-                            <Button variant="ghost" size="sm">Editar</Button>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
-
-            <div className="space-y-4">
-                <h2 className="text-xl font-bold flex items-center gap-2 px-1"><History className="h-5 w-5" /> Histórico de Execuções</h2>
-                <div className="grid gap-3">
-                    {execucoes?.map((e: any) => (
-                        <Card key={e.id} className="border-none bg-card shadow-sm overflow-hidden">
-                            <CardContent className="p-0">
-                                <div className="p-4 flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-success/10 text-success">
-                                            <CheckCircle2 className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold">{tarefas?.find((t: any) => t.id === e.tarefa_id)?.titulo}</p>
-                                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
-                                                {format(new Date(e.data_execucao), "dd/MM/yyyy HH:mm", { locale: ptBR })} · {(e.profile as any)?.full_name || "Membro da Equipe"}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {(e.fotos_urls as any[])?.length > 0 && (
-                                        <div className="flex items-center gap-1 text-xs text-primary">
-                                            <ImageIcon className="h-4 w-4" />
-                                            <span>{(e.fotos_urls as any[]).length}</span>
-                                        </div>
-                                    )}
-                                </div>
-                                {e.observacao && (
-                                    <div className="px-4 pb-4 text-xs italic text-muted-foreground border-t pt-2 bg-muted/10">
-                                        "{e.observacao}"
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            </div>
-        </>
-    );
-}
 
 export default CheckIn;

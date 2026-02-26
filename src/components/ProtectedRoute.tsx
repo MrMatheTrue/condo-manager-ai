@@ -1,11 +1,12 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading, isColaborador, user } = useAuth();
+export function ProtectedRoute({ children, requiredRole }: { children: React.ReactNode, requiredRole?: 'sindico' | 'colaborador' }) {
+  const { session, loading, isColaborador, isSindico, user } = useAuth();
+  const location = useLocation();
 
   // Check colaborador access status
   const { data: acesso, isLoading: acessoLoading } = useQuery({
@@ -34,13 +35,31 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   // Colaborador with no access record yet → select condo
-  if (isColaborador && !acesso) {
+  if (isColaborador && !acesso && location.pathname !== "/selecionar-condominio") {
     return <Navigate to="/selecionar-condominio" replace />;
   }
 
   // Colaborador pending or rejected → waiting screen
-  if (isColaborador && acesso && acesso.status !== "aprovado") {
+  if (isColaborador && acesso && acesso.status !== "aprovado" && location.pathname !== "/aguardando-aprovacao") {
     return <Navigate to="/aguardando-aprovacao" replace />;
+  }
+
+  // Role-based URL protection
+  if (requiredRole === 'sindico' && !isSindico) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Administrative pages that colaboradores shouldn't see
+  const adminPages = ['/ia', '/configuracoes', '/admin', '/onboarding'];
+  if (isColaborador && adminPages.some(page => location.pathname.startsWith(page))) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Specific condo management pages (except checkin and obrigacoes)
+  if (isColaborador && location.pathname.includes('/condominios/') &&
+    !location.pathname.endsWith('/checkin') &&
+    !location.pathname.endsWith('/obrigacoes')) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;

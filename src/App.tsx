@@ -36,21 +36,26 @@ const App = () => (
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            {/* Public post-registration flows (no ProtectedRoute guard needed) */}
             <Route path="/selecionar-condominio" element={<SelecionarCondominio />} />
             <Route path="/aguardando-aprovacao" element={<AguardandoAprovacao />} />
+
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route path="/condominios/:id" element={<CondominioDetails />} />
+
+              {/* Síndico-only routes */}
+              <Route path="/onboarding" element={<ProtectedRoute requiredRole="sindico"><Onboarding /></ProtectedRoute>} />
+              <Route path="/condominios/:id" element={<ProtectedRoute requiredRole="sindico"><CondominioDetails /></ProtectedRoute>} />
+              <Route path="/condominios/:id/documentos" element={<ProtectedRoute requiredRole="sindico"><Documentos /></ProtectedRoute>} />
+              <Route path="/condominios/:id/equipe" element={<ProtectedRoute requiredRole="sindico"><Equipe /></ProtectedRoute>} />
+              <Route path="/configuracoes" element={<ProtectedRoute requiredRole="sindico"><Configuracoes /></ProtectedRoute>} />
+              <Route path="/ia" element={<ProtectedRoute requiredRole="sindico"><IAChat /></ProtectedRoute>} />
+              <Route path="/admin" element={<ProtectedRoute requiredRole="sindico"><AdminDashboard /></ProtectedRoute>} />
+
+              {/* Shared or specific access routes */}
               <Route path="/condominios/:id/obrigacoes" element={<Obrigacoes />} />
-              <Route path="/condominios/:id/documentos" element={<Documentos />} />
               <Route path="/condominios/:id/checkin" element={<CheckIn />} />
-              <Route path="/condominios/:id/equipe" element={<Equipe />} />
-              <Route path="/configuracoes" element={<Configuracoes />} />
-              <Route path="/ia" element={<IAChat />} />
-              <Route path="/admin" element={<AdminDashboard />} />
             </Route>
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

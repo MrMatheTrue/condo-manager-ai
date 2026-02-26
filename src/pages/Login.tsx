@@ -20,36 +20,38 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao entrar",
-        description: error.message === "Invalid login credentials"
-          ? "E-mail ou senha incorretos."
-          : error.message,
-      });
-      setLoading(false);
-      return;
-    }
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao entrar",
+          description: error.message === "Invalid login credentials"
+            ? "E-mail ou senha incorretos."
+            : error.message,
+        });
+        setLoading(false);
+        return;
+      }
 
-    const user = (await supabase.auth.getUser()).data.user;
-    if (user) {
-      const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single();
-
-      if (roleData?.role === "admin") {
-        navigate("/admin");
-      } else if (roleData?.role === "zelador") {
-        const { data: oper } = await supabase.from("usuarios_operacionais").select("condominio_id").eq("user_id", user.id).single();
-        if (oper) {
-          navigate(`/condominios/${oper.condominio_id}/checkin`);
-        } else {
-          navigate("/dashboard");
-        }
-      } else {
+      if (data?.user) {
+        // Navigate to dashboard and let the App routing logic handle the rest
+        // This avoids hanging on legacy role checks
         navigate("/dashboard");
       }
+    } catch (err) {
+      console.error("Login unexpected error:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro inesperado",
+        description: "Ocorreu um erro ao processar seu login. Tente novamente.",
+      });
+    } finally {
+      // In case navigation doesn't happen, ensure we stop loading
+      // But usually navigate will unmount the component
+      const timer = setTimeout(() => setLoading(false), 2000);
+      return () => clearTimeout(timer);
     }
   };
 

@@ -27,7 +27,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   profile: null,
-  isSindico: true,
+  // ✅ FIX: defaults false — evita "flash" de acesso de síndico durante loading
+  isSindico: false,
   isColaborador: false,
   signOut: async () => { },
   refreshProfile: async () => { },
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -48,8 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", userId)
         .maybeSingle();
 
-      if (error) {
-        // Fallback for missing 'role' column
+      if (error || !data) {
+        // Fallback sem coluna role
         const { data: fallbackData } = await supabase
           .from("profiles")
           .select("id, full_name, email, phone, avatar_url")
@@ -57,13 +58,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .maybeSingle();
 
         if (fallbackData) {
-          setProfile({ ...fallbackData, role: "sindico" } as Profile);
+          const p = { ...fallbackData, role: "sindico" } as Profile;
+          setProfile(p);
+          return p;
         }
-      } else if (data) {
-        setProfile(data as Profile);
+        return null;
       }
+
+      setProfile(data as Profile);
+      return data as Profile;
     } catch (err) {
       console.error("fetchProfile error:", err);
+      return null;
     }
   };
 
@@ -74,19 +80,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Use onAuthStateChange as the single source of truth for session initialization
-    // It fires the current session state immediately upon subscription
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, currentSession) => {
+      async (event, currentSession) => {
         setSession(currentSession);
 
         if (currentSession?.user) {
-          // Apply pending role from OAuth if exists
+          const userId = currentSession.user.id;
+
+          // ✅ FIX: Aplicar pending_role do OAuth ANTES de buscar o perfil
           const pendingRole = localStorage.getItem("pending_role");
           if (pendingRole) {
             try {
               await supabase.from("profiles").upsert({
-                id: currentSession.user.id,
+                id: userId,
                 role: pendingRole,
                 full_name: currentSession.user.user_metadata?.full_name || "",
                 email: currentSession.user.email || "",
@@ -97,7 +103,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          await fetchProfile(currentSession.user.id);
+          const loadedProfile = await fetchProfile(userId);
+
+          // ✅ FIX: Redirecionar novo usuário Google para tela correta
+          if (event === "SIGNED_IN" && currentSession.user.app_metadata?.provider === "google") {
+            // Verifica se é novo usuário (criado há menos de 30 segundos)
+            const createdAt = new Date(currentSession.user.created_at).getTime();
+            const isNewUser = Date.now() - createdAt < 30000;
+
+            if (isNewUser && loadedProfile) {
+              const targetRole = pendingRole || loadedProfile.role;
+              if (targetRole === "colaborador") {
+                window.location.href = "/selecionar-condominio";
+              } else {
+                // Verifica se já tem condomínio cadastrado
+                const { data: condos } = await supabase
+                  .from("condominios")
+                  .select("id")
+                  .eq("sindico_id", userId)
+                  .limit(1);
+                if (!condos || condos.length === 0) {
+                  window.location.href = "/onboarding";
+                }
+              }
+            }
+          }
         } else {
           setProfile(null);
         }
@@ -114,20 +144,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
-      setProfile(null);
-      setSession(null);
     } catch (error) {
       console.error("Error signing out:", error);
     } finally {
-      // Clear everything just in case
       setProfile(null);
       setSession(null);
     }
   };
 
-  // STRICT defaults: if no profile is loaded yet, the user has NO permissions.
-  // This prevents the "flash" of admin access during loading or for guest users.
-  const isSindico = !!profile && (profile.role === "sindico" || profile.role === "zelador" || profile.role === "funcionario");
+  // ✅ FIX: defaults false — usuário sem perfil carregado não tem permissão alguma
+  const isSindico = !!profile && (profile.role === "sindico" || profile.role === "zelador" || profile.role === "funcionario" || profile.role === "admin");
   const isColaborador = !!profile && profile.role === "colaborador";
 
   return (

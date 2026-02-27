@@ -116,7 +116,7 @@ const CondominioDetails = () => {
                     <Button variant="outline" onClick={() => navigate(`/condominios/${id}/equipe`)}>
                         <Users className="mr-2 h-4 w-4" /> Gerenciar Equipe
                     </Button>
-                    <Button onClick={() => navigate(`/ia`)}>
+                    <Button onClick={() => navigate(`/ia/${id}`)}>
                         <Building2 className="mr-2 h-4 w-4" /> Falar com IA
                     </Button>
                 </div>

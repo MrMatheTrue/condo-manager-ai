@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Loader2, ShieldCheck, HardHat } from "lucide-react";
+import { Building2, Loader2, ShieldCheck, HardHat, Mail } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +20,7 @@ const Register = () => {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,41 +34,39 @@ const Register = () => {
       email,
       password,
       options: {
-        // ✅ FIX: role agora vai nos metadados — o trigger vai ler e salvar corretamente
         data: { full_name: name, phone, role },
-        emailRedirectTo: window.location.origin,
+        // Redirect to /dashboard after email confirmation — AuthContext handles the rest
+        emailRedirectTo: `${window.location.origin}/dashboard`,
       },
     });
 
+    setLoading(false);
+
     if (error) {
       toast({ variant: "destructive", title: "Erro ao cadastrar", description: error.message });
-      setLoading(false);
       return;
     }
 
-    // ✅ FIX: Usar upsert para garantir que a role é salva mesmo se o trigger já rodou
-    if (data.user) {
-      const { error: upsertError } = await supabase.from("profiles").upsert({
-        id: data.user.id,
-        role,
-        full_name: name,
-        email,
+    // Case 1: Email confirmation is REQUIRED (Supabase default)
+    // data.session is null — user must confirm email first
+    if (!data.session) {
+      setEmailSent(true);
+      toast({
+        title: "Verifique seu e-mail!",
+        description: `Enviamos um link de confirmação para ${email}. Clique no link para ativar sua conta.`,
       });
-
-      if (upsertError) {
-        console.error("Profile upsert error:", upsertError.message);
-        // Tenta update como fallback
-        await supabase.from("profiles").update({ role, full_name: name }).eq("id", data.user.id);
-      }
+      return;
     }
 
+    // Case 2: Email confirmation is DISABLED — auto-confirmed, session exists
+    // The trigger handle_new_user already created the profile.
+    // No need to upsert here — trigger handles it with SECURITY DEFINER.
     toast({
       title: "Cadastro realizado!",
       description: role === "sindico"
         ? "Bem-vindo! Vamos configurar seu primeiro condomínio."
         : "Bem-vindo! Agora selecione o condomínio onde você trabalha.",
     });
-    setLoading(false);
 
     if (role === "sindico") {
       navigate("/onboarding");
@@ -81,13 +80,12 @@ const Register = () => {
       toast({ variant: "destructive", title: "Selecione seu papel", description: "Escolha se você é Síndico(a) ou Colaborador(a) antes de continuar." });
       return;
     }
-    // ✅ Salva role no localStorage — AuthContext vai aplicar após o redirect OAuth
+    // Save role so AuthContext can apply it after OAuth redirect
     localStorage.setItem("pending_role", role);
 
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        // ✅ FIX: Redirect para /dashboard — AuthContext detecta novo usuário e redireciona corretamente
         redirectTo: `${window.location.origin}/dashboard`,
         queryParams: {
           access_type: "offline",
@@ -102,6 +100,49 @@ const Register = () => {
     { id: "colaborador", label: "Colaborador(a)", desc: "Executo tarefas e rondas diárias", icon: HardHat },
   ];
 
+  // ── Email confirmation sent screen ────────────────────────────────────────
+  if (emailSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 gradient-hero">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <Link to="/" className="flex items-center justify-center gap-2 mb-2">
+              <Building2 className="h-7 w-7 text-primary" />
+              <span className="text-xl font-bold">SíndicoOS</span>
+            </Link>
+            <div className="flex justify-center mb-4">
+              <div className="p-4 rounded-full bg-primary/10">
+                <Mail className="h-10 w-10 text-primary" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl">Confirme seu e-mail</CardTitle>
+            <CardDescription className="mt-2">
+              Enviamos um link de confirmação para <strong>{email}</strong>.
+              Clique no link para ativar sua conta e fazer login.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 text-sm text-primary space-y-2">
+              <p>✓ Verifique sua caixa de entrada e spam</p>
+              <p>✓ O link expira em 24 horas</p>
+              <p>✓ Após confirmar, você poderá fazer login</p>
+            </div>
+            <Button variant="outline" className="w-full" onClick={() => setEmailSent(false)}>
+              Voltar ao cadastro
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              Já tem uma conta?{" "}
+              <Link to="/login" className="text-primary hover:underline font-medium">
+                Entrar
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Registration form ─────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center px-4 gradient-hero">
       <Card className="w-full max-w-md">

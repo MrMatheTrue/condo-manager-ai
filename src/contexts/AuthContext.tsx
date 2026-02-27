@@ -35,6 +35,9 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+// Public pages where we should redirect authenticated users to the app
+const PUBLIC_PATHS = ['/', '/login', '/register'];
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,26 +57,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return p;
       }
 
-      // Perfil não existe — criar automaticamente
+      // Profile doesn't exist yet — create it (handles edge cases where trigger was slow)
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const role = user.user_metadata?.role ?? "sindico";
-        await supabase.from("profiles").upsert({
+        const { error } = await supabase.from("profiles").upsert({
           id: userId,
           full_name: user.user_metadata?.full_name ?? user.email ?? "",
           email: user.email ?? "",
           role,
         });
-        const p: Profile = {
-          id: userId,
-          full_name: user.user_metadata?.full_name ?? "",
-          email: user.email ?? "",
-          phone: null,
-          avatar_url: user.user_metadata?.avatar_url ?? null,
-          role,
-        };
-        setProfile(p);
-        return p;
+        if (!error) {
+          const p: Profile = {
+            id: userId,
+            full_name: user.user_metadata?.full_name ?? "",
+            email: user.email ?? "",
+            phone: null,
+            avatar_url: user.user_metadata?.avatar_url ?? null,
+            role,
+          };
+          setProfile(p);
+          return p;
+        }
       }
       return null;
     } catch (err) {
@@ -89,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Inicializa com sessão do localStorage imediatamente
+    // Initialize with session from localStorage immediately
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       if (!mounted) return;
       setSession(s);
@@ -99,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (mounted) setLoading(false);
     });
 
-    // Escuta mudanças posteriores (token refresh, signOut, etc.)
+    // Listen for auth state changes (token refresh, signOut, new login, email confirmation)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         if (!mounted) return;
@@ -116,11 +121,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // SIGNED_IN via OAuth — precisamos criar/atualizar o perfil
         if (event === "SIGNED_IN" && currentSession) {
           setSession(currentSession);
 
-          // Aplicar pending_role de OAuth (setado no Register)
+          // Apply pending_role from OAuth (set in Register before redirect)
           const pendingRole = localStorage.getItem("pending_role");
           if (pendingRole) {
             try {
@@ -139,21 +143,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           const loadedProfile = await fetchProfile(currentSession.user.id);
 
-          // Redirecionar usuário NOVO para fluxo correto
-          const created = new Date(currentSession.user.created_at).getTime();
-          const isNew = Date.now() - created < 60_000;
+          const currentPath = window.location.pathname;
+          const isOnPublicPage = PUBLIC_PATHS.includes(currentPath);
 
-          if (isNew && loadedProfile) {
-            if (loadedProfile.role === "colaborador") {
-              window.location.href = "/selecionar-condominio";
-              return;
-            } else if (loadedProfile.role === "sindico") {
-              const { count } = await supabase
-                .from("condominios")
-                .select("id", { count: "exact", head: true })
-                .eq("sindico_id", currentSession.user.id);
-              if (!count || count === 0) {
-                window.location.href = "/onboarding";
+          // Check if user is new (created < 90s ago — gives extra buffer for email confirmation)
+          const created = new Date(currentSession.user.created_at).getTime();
+          const isNew = Date.now() - created < 90_000;
+
+          if (loadedProfile) {
+            if (isNew) {
+              // Brand new user — guide through onboarding flow
+              if (loadedProfile.role === "colaborador") {
+                window.location.href = "/selecionar-condominio";
+                return;
+              } else {
+                // Sindico — check if they already have a condo (in case of re-confirm)
+                const { count } = await supabase
+                  .from("condominios")
+                  .select("id", { count: "exact", head: true })
+                  .eq("sindico_id", currentSession.user.id);
+                if (!count || count === 0) {
+                  window.location.href = "/onboarding";
+                  return;
+                }
+              }
+            } else if (isOnPublicPage) {
+              // Existing user landing on a public page after email confirmation click
+              // or after logging in — send them to the app
+              if (loadedProfile.role === "colaborador") {
+                window.location.href = "/dashboard";
+                return;
+              } else {
+                // Sindico — check if they have condos
+                const { count } = await supabase
+                  .from("condominios")
+                  .select("id", { count: "exact", head: true })
+                  .eq("sindico_id", currentSession.user.id);
+                if (!count || count === 0) {
+                  window.location.href = "/onboarding";
+                } else {
+                  window.location.href = "/dashboard";
+                }
                 return;
               }
             }

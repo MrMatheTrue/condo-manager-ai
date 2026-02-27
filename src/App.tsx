@@ -22,6 +22,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import SelecionarCondominio from "./pages/SelecionarCondominio";
 import AguardandoAprovacao from "./pages/AguardandoAprovacao";
+import Notificacoes from "./pages/Notificacoes";
 
 const queryClient = new QueryClient();
 
@@ -49,7 +50,9 @@ const App = () => (
               <Route path="/condominios/:id/equipe" element={<ProtectedRoute requiredRole="sindico"><Equipe /></ProtectedRoute>} />
               <Route path="/configuracoes" element={<ProtectedRoute requiredRole="sindico"><Configuracoes /></ProtectedRoute>} />
               <Route path="/ia" element={<ProtectedRoute requiredRole="sindico"><IAChat /></ProtectedRoute>} />
+              <Route path="/ia/:condominioId" element={<ProtectedRoute requiredRole="sindico"><IAChat /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute requiredRole="sindico"><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/notificacoes" element={<Notificacoes />} />
 
               {/* Shared or specific access routes */}
               <Route path="/condominios/:id/obrigacoes" element={<Obrigacoes />} />

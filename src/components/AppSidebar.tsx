@@ -9,9 +9,11 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { NavLink } from "@/components/NavLink";
-import { LayoutDashboard, Bot, Bell, Settings, LogOut, ClipboardCheck, CheckSquare } from "lucide-react";
+import { LayoutDashboard, Bot, Bell, Settings, LogOut, CheckSquare } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const sindicoNav = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -19,13 +21,13 @@ const sindicoNav = [
   { title: "Notificações", url: "/notificacoes", icon: Bell },
 ];
 
-// Colaborador only gets Obrigacoes + Check-in (condominioId resolved from their acesso)
 const colaboradorNav = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Notificações", url: "/notificacoes", icon: Bell },
 ];
 
 export function AppSidebar() {
-  const { signOut, isColaborador, profile } = useAuth();
+  const { signOut, isColaborador, user } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -34,6 +36,21 @@ export function AppSidebar() {
   };
 
   const navItems = isColaborador ? colaboradorNav : sindicoNav;
+
+  // Fetch unread notification count
+  const { data: unreadCount } = useQuery({
+    queryKey: ["notif-unread", user?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("notificacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user!.id)
+        .eq("lida", false);
+      return count ?? 0;
+    },
+    enabled: !!user,
+    refetchInterval: 30_000, // poll every 30s
+  });
 
   return (
     <Sidebar>
@@ -55,7 +72,14 @@ export function AppSidebar() {
                       className="hover:bg-sidebar-accent"
                       activeClassName="bg-sidebar-accent text-primary font-medium"
                     >
-                      <item.icon className="mr-2 h-4 w-4" />
+                      <div className="relative">
+                        <item.icon className="mr-2 h-4 w-4" />
+                        {item.url === "/notificacoes" && unreadCount && unreadCount > 0 ? (
+                          <span className="absolute -top-1.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-destructive flex items-center justify-center text-[9px] font-bold text-white">
+                            {unreadCount > 9 ? "9+" : unreadCount}
+                          </span>
+                        ) : null}
+                      </div>
                       <span>{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>

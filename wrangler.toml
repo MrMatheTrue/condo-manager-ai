@@ -4,9 +4,18 @@ compatibility_date = "2024-11-01"
 [assets]
 directory = "dist"
 
+# ──────────────────────────────────────────────────────────────────────────────
+# IMPORTANT: These [vars] are Cloudflare Workers runtime variables.
+# For Vite build-time env vars (VITE_*), set them in the Cloudflare Pages
+# dashboard under Settings > Environment variables > Build variables.
+#
+# Required variables to set in Cloudflare Pages dashboard:
+#   VITE_SUPABASE_URL       = https://qzelgoakigcjvhpxhqha.supabase.co
+#   VITE_SUPABASE_ANON_KEY  = eyJ... (your Supabase project anon/public JWT key)
+#   VITE_GROQ_API_KEY       = gsk_... (your Groq API key)
+#   VITE_GROQ_MODEL         = llama-3.3-70b-versatile
+# ──────────────────────────────────────────────────────────────────────────────
 [vars]
 VITE_SUPABASE_PROJECT_ID = "qzelgoakigcjvhpxhqha"
 VITE_SUPABASE_URL = "https://qzelgoakigcjvhpxhqha.supabase.co"
-VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_8DOf3EoIKBNNZLFOHV2pOQ_MXxmpMG3"
-VITE_GROQ_API_KEY = "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"
-VITE_GROQ_MODEL = "openai/gpt-oss-120b"
+VITE_GROQ_MODEL = "llama-3.3-70b-versatile"

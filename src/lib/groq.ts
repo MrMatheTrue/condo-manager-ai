@@ -1,14 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-
-// ✅ FIX: "openai/gpt-oss-120b" não existe no Groq → causa loop eterno.
-// Detectamos modelos inválidos e forçamos fallback para um modelo válido.
-const MODELOS_INVALIDOS = ["openai/", "gpt-4", "gpt-3.5"];
-const RAW_MODEL = import.meta.env.VITE_GROQ_MODEL || "";
-export const GROQ_MODEL = MODELOS_INVALIDOS.some(m => RAW_MODEL.startsWith(m))
-    ? "llama-3.3-70b-versatile"
-    : (RAW_MODEL || "llama-3.3-70b-versatile");
+const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || "llama-3.3-70b-versatile";
 
 export interface ChatMessage {
     role: "system" | "user" | "assistant" | "tool";
@@ -22,7 +15,7 @@ export const tools = [
         type: "function",
         function: {
             name: "get_all_data",
-            description: "Retorna todos os condomínios e suas obrigações para resumo.",
+            description: "Retorna todos os condomínios e suas obrigações para resumo geral.",
             parameters: { type: "object", properties: {} }
         }
     },
@@ -30,14 +23,15 @@ export const tools = [
         type: "function",
         function: {
             name: "add_obrigacao",
-            description: "Cria uma nova obrigação para um condomínio.",
+            description: "Cria uma nova obrigação periódica para um condomínio.",
             parameters: {
                 type: "object",
                 properties: {
-                    condominio_id: { type: "string" },
-                    nome: { type: "string" },
-                    periodicidade_dias: { type: "number" },
-                    criticidade: { type: "string", enum: ["baixa", "media", "alta", "critica"] }
+                    condominio_id: { type: "string", description: "UUID do condomínio" },
+                    nome: { type: "string", description: "Nome da obrigação" },
+                    periodicidade_dias: { type: "number", description: "Ex: 365=anual, 180=semestral, 90=trimestral, 30=mensal" },
+                    criticidade: { type: "string", enum: ["baixa", "media", "alta", "critica"] },
+                    descricao: { type: "string" }
                 },
                 required: ["condominio_id", "nome"]
             }
@@ -47,14 +41,31 @@ export const tools = [
         type: "function",
         function: {
             name: "add_condominio",
-            description: "Cadastra um novo condomínio.",
+            description: "Cadastra um novo condomínio para o síndico.",
             parameters: {
                 type: "object",
                 properties: {
                     nome: { type: "string" },
-                    endereco: { type: "string" }
+                    endereco: { type: "string" },
+                    cidade: { type: "string" },
+                    estado: { type: "string" }
                 },
                 required: ["nome"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "get_obrigacoes_status",
+            description: "Lista obrigações filtradas por status.",
+            parameters: {
+                type: "object",
+                properties: {
+                    condominio_id: { type: "string" },
+                    status: { type: "string", enum: ["em_dia", "atencao", "vencida"] }
+                },
+                required: []
             }
         }
     }
@@ -62,7 +73,7 @@ export const tools = [
 
 export const queryGroq = async (messages: ChatMessage[]) => {
     if (!GROQ_API_KEY) {
-        throw new Error("VITE_GROQ_API_KEY is not defined");
+        throw new Error("VITE_GROQ_API_KEY não configurada. Verifique as variáveis de ambiente.");
     }
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -76,46 +87,54 @@ export const queryGroq = async (messages: ChatMessage[]) => {
             model: GROQ_MODEL,
             temperature: 0.1,
             max_tokens: 1024,
-            tools: tools,
+            tools,
             tool_choice: "auto",
         }),
     });
 
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || "Failed to query Groq");
+        let errorMsg = `Groq API error: HTTP ${response.status}`;
+        try {
+            const errorData = await response.json();
+            errorMsg = errorData.error?.message || errorMsg;
+        } catch { /* ignore */ }
+        throw new Error(errorMsg);
     }
 
     const data = await response.json();
+
+    if (!data.choices?.length) {
+        throw new Error("Resposta inesperada da IA — nenhum resultado retornado.");
+    }
+
     return data.choices[0].message;
 };
 
-/**
- * System Context Generator
- * Enriches the AI with real-time data about the current condominium
- */
 export const getAISystemPrompt = async (condoId: string) => {
     const { data: condo } = await supabase.from("condominios").select("*").eq("id", condoId).single();
     const { data: obrigacoes } = await supabase.from("obrigacoes").select("*").eq("condominio_id", condoId);
     const { data: tarefas } = await supabase.from("tarefas_checkin").select("*").eq("condominio_id", condoId);
 
-    const context = `
-    VOCÊ É O ASSISTENTE SINDIPRO.
-    Atuando no condomínio: ${condo?.nome || 'Não identificado'}.
-    ID do Condomínio: ${condoId}.
+    const vencidas = obrigacoes?.filter(o => o.status === "vencida").map(o => o.nome).join(", ") || "Nenhuma";
+    const emAtencao = obrigacoes?.filter(o => o.status === "atencao").map(o => o.nome).join(", ") || "Nenhuma";
 
-    STATUS ATUAL:
-    - Obrigações: ${obrigacoes?.length || 0} cadastradas.
-    - Tarefas Operacionais: ${tarefas?.length || 0} no roteiro.
-    - Vencimentos: ${obrigacoes?.filter(o => o.status === 'vencida').map(o => o.nome).join(', ') || 'Nenhum crítico'}.
+    return `Você é o SINDIPRO AI — assistente especializado em gestão de condomínios.
+Responda sempre em Português (BR), de forma objetiva e profissional. Use Markdown quando útil.
 
-    VOCÊ PODE:
-    1. Agendar novas obrigações usando a ferramenta 'add_obrigacao'.
-    2. Consultar o panorama geral.
-    3. Auxiliar em dúvidas de gestão.
+CONDOMÍNIO ATUAL: ${condo?.nome || "Não identificado"}
+ID: ${condoId}
 
-    Dê respostas curtas e objetivas em Português (BR). Use Markdown.
-    `;
+STATUS:
+- Obrigações cadastradas: ${obrigacoes?.length || 0}
+- Vencidas: ${vencidas}
+- Em atenção: ${emAtencao}
+- Tarefas operacionais: ${tarefas?.length || 0}
 
-    return context;
+VOCÊ PODE:
+1. Criar obrigações → use add_obrigacao
+2. Consultar dados → use get_all_data ou get_obrigacoes_status
+3. Criar condomínio → use add_condominio
+4. Responder perguntas de gestão condominial
+
+Seja breve, direto e confirme ações importantes antes de executar.`.trim();
 };

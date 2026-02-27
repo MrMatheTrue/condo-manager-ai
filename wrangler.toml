@@ -5,7 +5,8 @@ compatibility_date = "2024-11-01"
 directory = "dist"
 
 [vars]
+VITE_SUPABASE_PROJECT_ID = "qzelgoakigcjvhpxhqha"
 VITE_SUPABASE_URL = "https://qzelgoakigcjvhpxhqha.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_8DOf3EoIKBNNZLFOHV2pOQ_MXxmpMG3"
 VITE_GROQ_API_KEY = "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"
-VITE_GROQ_MODEL = "llama-3.3-70b-versatile"
+VITE_GROQ_MODEL = "openai/gpt-oss-120b"

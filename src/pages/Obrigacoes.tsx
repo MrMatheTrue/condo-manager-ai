@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,13 +17,32 @@ import { format, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
 
-// ── FormFields extraído FORA do componente principal (evita erro TS com early returns) ──
+type Criticidade = Database["public"]["Enums"]["criticidade"];
+type StatusObrigacao = Database["public"]["Enums"]["status_obrigacao"];
+
+interface Obrigacao {
+    id: string;
+    condominio_id: string;
+    nome: string;
+    descricao: string | null;
+    data_ultima_realizacao: string | null;
+    data_proxima_realizacao: string | null;
+    periodicidade_dias: number;
+    criticidade: Criticidade;
+    dias_alerta_antecipado: number;
+    responsavel_nome: string | null;
+    observacoes: string | null;
+    status: StatusObrigacao;
+    created_at: string;
+    updated_at: string;
+}
+
 interface FormFieldsProps {
     nome: string; setNome: (v: string) => void;
     descricao: string; setDescricao: (v: string) => void;
     dataUltima: string; setDataUltima: (v: string) => void;
     periodicidade: string; setPeriodicidade: (v: string) => void;
-    criticidade: string; setCriticidade: (v: string) => void;
+    criticidade: Criticidade; setCriticidade: (v: Criticidade) => void;
     alerta: string; setAlerta: (v: string) => void;
     responsavel: string; setResponsavel: (v: string) => void;
     obs: string; setObs: (v: string) => void;
@@ -46,7 +66,7 @@ function FormFields({
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>Criticidade</Label>
-                    <Select value={criticidade} onValueChange={setCriticidade}>
+                    <Select value={criticidade} onValueChange={(v: Criticidade) => setCriticidade(v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="baixa">Baixa</SelectItem>
@@ -108,13 +128,13 @@ const Obrigacoes = () => {
     const queryClient = useQueryClient();
     const { isColaborador } = useAuth();
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [editingObrigacao, setEditingObrigacao] = useState<any>(null);
+    const [editingObrigacao, setEditingObrigacao] = useState<Obrigacao | null>(null);
 
     const [nome, setNome] = useState("");
     const [descricao, setDescricao] = useState("");
     const [dataUltima, setDataUltima] = useState("");
     const [periodicidade, setPeriodicidade] = useState("365");
-    const [criticidade, setCriticidade] = useState("media");
+    const [criticidade, setCriticidade] = useState<Criticidade>("media");
     const [alerta, setAlerta] = useState("30");
     const [responsavel, setResponsavel] = useState("");
     const [obs, setObs] = useState("");
@@ -147,6 +167,7 @@ const Obrigacoes = () => {
 
     const createMutation = useMutation({
         mutationFn: async () => {
+            if (!id) throw new Error("Condomínio não identificado");
             const lastDate = dataUltima ? new Date(dataUltima) : new Date();
             const proxima = addDays(lastDate, parseInt(periodicidade));
             const { error } = await supabase.from("obrigacoes").insert({
@@ -170,11 +191,12 @@ const Obrigacoes = () => {
             resetForm();
             toast({ title: "Obrigação criada com sucesso!" });
         },
-        onError: (err: any) => toast({ variant: "destructive", title: "Erro", description: err.message }),
+        onError: (err: Error) => toast({ variant: "destructive", title: "Erro", description: err.message }),
     });
 
     const updateMutation = useMutation({
         mutationFn: async () => {
+            if (!editingObrigacao) return;
             const lastDate = dataUltima ? new Date(dataUltima) : new Date();
             const proxima = addDays(lastDate, parseInt(periodicidade));
             const { error } = await supabase.from("obrigacoes").update({
@@ -231,7 +253,7 @@ const Obrigacoes = () => {
         onError: (err: any) => toast({ variant: "destructive", title: "Erro", description: err.message }),
     });
 
-    const openEdit = (o: any) => {
+    const openEdit = (o: Obrigacao) => {
         setEditingObrigacao(o);
         setNome(o.nome);
         setDescricao(o.descricao || "");

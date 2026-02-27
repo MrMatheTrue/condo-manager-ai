@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { Session, User } from "@supabase/supabase-js";
+import { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Profile {
@@ -13,7 +13,7 @@ interface Profile {
 
 interface AuthContextType {
   session: Session | null;
-  user: User | null;
+  user: Session["user"] | null;
   loading: boolean;
   profile: Profile | null;
   isSindico: boolean;
@@ -22,7 +22,6 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
-// ✅ FIX: default isSindico: false — evita flash de acesso indevido durante loading
 const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
@@ -43,31 +42,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("profiles")
         .select("id, full_name, email, phone, avatar_url, role")
         .eq("id", userId)
         .maybeSingle();
 
-      if (error || !data) {
-        // Fallback sem coluna role
-        const { data: fb } = await supabase
-          .from("profiles")
-          .select("id, full_name, email, phone, avatar_url")
-          .eq("id", userId)
-          .maybeSingle();
-        if (fb) {
-          const p = { ...fb, role: "sindico" } as Profile;
-          setProfile(p);
-          return p;
-        }
-        return null;
+      if (data) {
+        const p: Profile = { ...data, role: data.role ?? "sindico" };
+        setProfile(p);
+        return p;
       }
 
-      // Se role vier null do banco, assume sindico (dados antigos)
-      const p = { ...data, role: data.role ?? "sindico" } as Profile;
-      setProfile(p);
-      return p;
+      // Perfil não existe — criar automaticamente
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const role = user.user_metadata?.role ?? "sindico";
+        await supabase.from("profiles").upsert({
+          id: userId,
+          full_name: user.user_metadata?.full_name ?? user.email ?? "",
+          email: user.email ?? "",
+          role,
+        });
+        const p: Profile = {
+          id: userId,
+          full_name: user.user_metadata?.full_name ?? "",
+          email: user.email ?? "",
+          phone: null,
+          avatar_url: user.user_metadata?.avatar_url ?? null,
+          role,
+        };
+        setProfile(p);
+        return p;
+      }
+      return null;
     } catch (err) {
       console.error("fetchProfile error:", err);
       return null;
@@ -79,12 +87,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    let mounted = true;
+
+    // Inicializa com sessão do localStorage imediatamente
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (!mounted) return;
+      setSession(s);
+      if (s?.user) {
+        await fetchProfile(s.user.id);
+      }
+      if (mounted) setLoading(false);
+    });
+
+    // Escuta mudanças posteriores (token refresh, signOut, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        setSession(currentSession);
+        if (!mounted) return;
 
-        if (currentSession?.user) {
-          // Aplicar pending_role vindo de OAuth (localStorage)
+        if (event === "SIGNED_OUT") {
+          setSession(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
+        if (event === "TOKEN_REFRESHED" && currentSession) {
+          setSession(currentSession);
+          return;
+        }
+
+        // SIGNED_IN via OAuth — precisamos criar/atualizar o perfil
+        if (event === "SIGNED_IN" && currentSession) {
+          setSession(currentSession);
+
+          // Aplicar pending_role de OAuth (setado no Register)
           const pendingRole = localStorage.getItem("pending_role");
           if (pendingRole) {
             try {
@@ -93,68 +129,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 role: pendingRole,
                 full_name: currentSession.user.user_metadata?.full_name ?? "",
                 email: currentSession.user.email ?? "",
+                avatar_url: currentSession.user.user_metadata?.avatar_url ?? null,
               });
               localStorage.removeItem("pending_role");
             } catch (err) {
-              console.error("Error applying pending role:", err);
+              console.error("pending_role upsert error:", err);
             }
           }
 
           const loadedProfile = await fetchProfile(currentSession.user.id);
 
-          // ✅ FIX: Redirecionar usuário OAuth novo para o fluxo correto
-          if (event === "SIGNED_IN" && loadedProfile) {
-            const isNew = (() => {
-              try {
-                const created = new Date(currentSession.user.created_at).getTime();
-                return Date.now() - created < 60_000; // criado há menos de 60s
-              } catch { return false; }
-            })();
+          // Redirecionar usuário NOVO para fluxo correto
+          const created = new Date(currentSession.user.created_at).getTime();
+          const isNew = Date.now() - created < 60_000;
 
-            if (isNew) {
-              if (loadedProfile.role === "colaborador") {
-                window.location.href = "/selecionar-condominio";
-              } else if (loadedProfile.role === "sindico") {
-                // Verificar se já tem condomínio
-                const { count } = await supabase
-                  .from("condominios")
-                  .select("id", { count: "exact", head: true })
-                  .eq("sindico_id", currentSession.user.id);
-                if (!count || count === 0) {
-                  window.location.href = "/onboarding";
-                }
+          if (isNew && loadedProfile) {
+            if (loadedProfile.role === "colaborador") {
+              window.location.href = "/selecionar-condominio";
+              return;
+            } else if (loadedProfile.role === "sindico") {
+              const { count } = await supabase
+                .from("condominios")
+                .select("id", { count: "exact", head: true })
+                .eq("sindico_id", currentSession.user.id);
+              if (!count || count === 0) {
+                window.location.href = "/onboarding";
+                return;
               }
             }
           }
-        } else {
-          setProfile(null);
         }
 
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error("signOut error:", error);
-    } finally {
-      setProfile(null);
-      setSession(null);
-    }
+    await supabase.auth.signOut();
+    setProfile(null);
+    setSession(null);
+    window.location.href = "/login";
   };
 
-  // ✅ FIX: isSindico = false enquanto loading para evitar acesso prematuro
-  const isSindico = !!profile && (
-    profile.role === "sindico" ||
-    profile.role === "admin" ||
-    profile.role === "zelador" ||
-    profile.role === "funcionario"
-  );
+  const isSindico = !!profile && ["sindico", "admin", "zelador", "funcionario"].includes(profile.role);
   const isColaborador = !!profile && profile.role === "colaborador";
 
   return (

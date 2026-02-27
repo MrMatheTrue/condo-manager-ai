@@ -285,7 +285,7 @@ const CheckIn = () => {
                                 <h2 className="text-xl font-bold">Histórico de Execuções</h2>
                                 {execucoes?.slice(0, 20).map(e => {
                                     const tarefa = tarefas?.find(t => t.id === e.tarefa_id);
-                                    const fotos: string[] = Array.isArray(e.fotos_urls) ? e.fotos_urls : [];
+                                    const fotos = (e.fotos_urls as string[]) || [];
                                     return (
                                         <Card key={e.id} className="border-none shadow-sm bg-card/60">
                                             <CardContent className="p-4 flex items-start gap-3">

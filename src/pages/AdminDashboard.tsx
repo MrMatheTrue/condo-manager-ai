@@ -26,10 +26,7 @@ const AdminDashboard = () => {
     const { data: users, isLoading: usersLoading } = useQuery({
         queryKey: ["admin-users", search],
         queryFn: async () => {
-            let query = supabase.from("profiles").select(`
-        *,
-        user_roles(role)
-      `);
+            let query = supabase.from("profiles").select("*");
 
             if (search) {
                 query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);

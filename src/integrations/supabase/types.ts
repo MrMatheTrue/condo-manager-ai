@@ -435,6 +435,47 @@ export type Database = {
         }
         Relationships: []
       }
+      usuarios_operacionais: {
+        Row: {
+          ativo: boolean
+          condominio_id: string
+          created_at: string
+          criado_por: string
+          email: string
+          id: string
+          nome: string
+          perfil: Database["public"]["Enums"]["perfil_operacional"]
+        }
+        Insert: {
+          ativo?: boolean
+          condominio_id: string
+          created_at?: string
+          criado_por: string
+          email: string
+          id?: string
+          nome: string
+          perfil?: Database["public"]["Enums"]["perfil_operacional"]
+        }
+        Update: {
+          ativo?: boolean
+          condominio_id?: string
+          created_at?: string
+          criado_por?: string
+          email?: string
+          id?: string
+          nome?: string
+          perfil?: Database["public"]["Enums"]["perfil_operacional"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuarios_operacionais_condominio_id_fkey"
+            columns: ["condominio_id"]
+            isOneToOne: false
+            referencedRelation: "condominios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

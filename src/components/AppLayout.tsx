@@ -156,7 +156,7 @@ export function AppLayout() {
               <div className="flex items-center gap-3 pl-4 border-l">
                 <div className="text-right hidden sm:block">
                   <p className="text-xs font-bold leading-none">{profile?.full_name || "Usuário"}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">{profile?.role}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">{(profile as any)?.role}</p>
                 </div>
                 <div
                   className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shadow-inner cursor-pointer hover:bg-primary/20 transition-colors"

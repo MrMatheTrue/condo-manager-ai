@@ -26,10 +26,7 @@ const AdminDashboard = () => {
     const { data: users, isLoading: usersLoading } = useQuery({
         queryKey: ["admin-users", search],
         queryFn: async () => {
-            let query = supabase.from("profiles").select(`
-        *,
-        user_roles(role)
-      `);
+            let query = supabase.from("profiles").select("*");
 
             if (search) {
                 query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
@@ -44,12 +41,13 @@ const AdminDashboard = () => {
     const { data: condominios } = useQuery({
         queryKey: ["admin-condos"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("condominios").select(`
-        *,
-        profiles:sindico_id(full_name)
-      `);
+            const { data, error } = await supabase.from("condominios").select("*");
             if (error) throw error;
-            return data;
+            // Fetch sindico names separately to avoid RLS join issues
+            const sindicoIds = [...new Set(data.map(c => c.sindico_id))];
+            const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", sindicoIds);
+            const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name]));
+            return data.map(c => ({ ...c, sindico_name: profileMap[c.sindico_id] || "Desconhecido" }));
         }
     });
 
@@ -129,7 +127,7 @@ const AdminDashboard = () => {
                                     <TableCell>{u.email}</TableCell>
                                     <TableCell>
                                         <Badge variant="secondary" className="capitalize">
-                                            {u.user_roles?.[0]?.role || "sem cargo"}
+                                            {(u as any).role || "sem cargo"}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>{new Date(u.created_at).toLocaleDateString("pt-BR")}</TableCell>
@@ -166,7 +164,7 @@ const AdminDashboard = () => {
                             {condominios?.map((c) => (
                                 <TableRow key={c.id}>
                                     <TableCell className="font-medium">{c.nome}</TableCell>
-                                    <TableCell>{c.profiles?.full_name || "Desconhecido"}</TableCell>
+                                    <TableCell>{(c as any).sindico_name || "Desconhecido"}</TableCell>
                                     <TableCell className="text-xs">{c.endereco}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="icon">

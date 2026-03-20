@@ -54,34 +54,34 @@ export type Database = {
       }
       condominio_acessos: {
         Row: {
+          colaborador_nome: string | null
           condominio_id: string
           created_at: string
           id: string
           modulos_permitidos: Json | null
           nivel_acesso: Database["public"]["Enums"]["nivel_acesso"]
-          user_id: string
           status: string
-          colaborador_nome: string | null
+          user_id: string
         }
         Insert: {
+          colaborador_nome?: string | null
           condominio_id: string
           created_at?: string
           id?: string
           modulos_permitidos?: Json | null
           nivel_acesso?: Database["public"]["Enums"]["nivel_acesso"]
-          user_id: string
           status?: string
-          colaborador_nome?: string | null
+          user_id: string
         }
         Update: {
+          colaborador_nome?: string | null
           condominio_id?: string
           created_at?: string
           id?: string
           modulos_permitidos?: Json | null
           nivel_acesso?: Database["public"]["Enums"]["nivel_acesso"]
-          user_id?: string
           status?: string
-          colaborador_nome?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -285,7 +285,7 @@ export type Database = {
         Row: {
           condominio_id: string
           created_at: string
-          criticidade: string
+          criticidade: Database["public"]["Enums"]["criticidade"]
           data_proxima_realizacao: string | null
           data_ultima_realizacao: string | null
           descricao: string | null
@@ -295,13 +295,13 @@ export type Database = {
           observacoes: string | null
           periodicidade_dias: number
           responsavel_nome: string | null
-          status: string
+          status: Database["public"]["Enums"]["status_obrigacao"]
           updated_at: string
         }
         Insert: {
           condominio_id: string
           created_at?: string
-          criticidade?: string
+          criticidade?: Database["public"]["Enums"]["criticidade"]
           data_proxima_realizacao?: string | null
           data_ultima_realizacao?: string | null
           descricao?: string | null
@@ -311,13 +311,13 @@ export type Database = {
           observacoes?: string | null
           periodicidade_dias?: number
           responsavel_nome?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["status_obrigacao"]
           updated_at?: string
         }
         Update: {
           condominio_id?: string
           created_at?: string
-          criticidade?: string
+          criticidade?: Database["public"]["Enums"]["criticidade"]
           data_proxima_realizacao?: string | null
           data_ultima_realizacao?: string | null
           descricao?: string | null
@@ -327,7 +327,7 @@ export type Database = {
           observacoes?: string | null
           periodicidade_dias?: number
           responsavel_nome?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["status_obrigacao"]
           updated_at?: string
         }
         Relationships: [
@@ -349,7 +349,6 @@ export type Database = {
           id: string
           phone: string | null
           updated_at: string
-          role: string
         }
         Insert: {
           avatar_url?: string | null
@@ -359,7 +358,6 @@ export type Database = {
           id: string
           phone?: string | null
           updated_at?: string
-          role?: string
         }
         Update: {
           avatar_url?: string | null
@@ -369,7 +367,6 @@ export type Database = {
           id?: string
           phone?: string | null
           updated_at?: string
-          role?: string
         }
         Relationships: []
       }
@@ -420,6 +417,24 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       usuarios_operacionais: {
         Row: {
           ativo: boolean
@@ -461,43 +476,22 @@ export type Database = {
           },
         ]
       }
-      user_roles: {
-        Row: {
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       has_condominio_access: {
-        Args: { _condominio_id: string; _user_id: string }
+        Args: { cid: string; uid: string }
         Returns: boolean
       }
       has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
+        Args: { r: Database["public"]["Enums"]["app_role"]; uid: string }
         Returns: boolean
       }
     }
     Enums: {
-      app_role: "sindico" | "funcionario" | "zelador" | "colaborador" | "admin"
+      app_role: "sindico" | "funcionario" | "zelador" | "admin" | "colaborador"
       criticidade: "baixa" | "media" | "alta" | "critica"
       frequencia_tarefa: "diaria" | "semanal" | "mensal" | "personalizada"
       nivel_acesso: "total" | "leitura" | "tarefas_only"
@@ -505,9 +499,9 @@ export type Database = {
       status_execucao: "pendente" | "concluida" | "nao_realizada"
       status_obrigacao: "em_dia" | "atencao" | "vencida"
       tipo_notificacao:
-      | "obrigacao_vencendo"
-      | "tarefa_atrasada"
-      | "documento_adicionado"
+        | "obrigacao_vencendo"
+        | "tarefa_atrasada"
+        | "documento_adicionado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -521,121 +515,121 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-  : never = never,
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-  ? R
-  : never
+    ? R
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-    DefaultSchema["Views"])
-  ? (DefaultSchema["Tables"] &
-    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-      Row: infer R
-    }
-  ? R
-  : never
-  : never
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-  | keyof DefaultSchema["Tables"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-    Insert: infer I
-  }
-  ? I
-  : never
+      Insert: infer I
+    }
+    ? I
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-    Insert: infer I
-  }
-  ? I
-  : never
-  : never
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-  | keyof DefaultSchema["Tables"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-    Update: infer U
-  }
-  ? U
-  : never
+      Update: infer U
+    }
+    ? U
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-    Update: infer U
-  }
-  ? U
-  : never
-  : never
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-  | keyof DefaultSchema["Enums"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-  : never
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-  | keyof DefaultSchema["CompositeTypes"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-  : never
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
 
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["sindico", "funcionario", "zelador", "colaborador"],
+      app_role: ["sindico", "funcionario", "zelador", "admin", "colaborador"],
       criticidade: ["baixa", "media", "alta", "critica"],
       frequencia_tarefa: ["diaria", "semanal", "mensal", "personalizada"],
       nivel_acesso: ["total", "leitura", "tarefas_only"],

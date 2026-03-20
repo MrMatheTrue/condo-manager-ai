@@ -53,7 +53,7 @@ const Equipe = () => {
     // Montar equipe unindo acessos + profiles
     const equipe = acessos?.map(acesso => ({
         ...acesso,
-        profile: memberProfiles?.find(p => p.id === acesso.user_id) ?? null,
+        profile: (memberProfiles as any[])?.find((p: any) => p.id === acesso.user_id) ?? null,
     })) ?? [];
 
     const pendentes = equipe.filter(m => m.status === "pendente");

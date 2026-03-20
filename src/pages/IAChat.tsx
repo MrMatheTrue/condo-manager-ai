@@ -236,7 +236,7 @@ const IAChat = () => {
                       {m.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                     </div>
                     <div className={`p-4 rounded-2xl shadow-sm text-sm ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-background border'}`}>
-                      <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>
                         {m.content || "*(Executando ferramenta operacional...)*"}
                       </ReactMarkdown>
                     </div>

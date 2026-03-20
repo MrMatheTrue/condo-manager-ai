@@ -167,7 +167,7 @@ const AdminDashboard = () => {
                             {condominios?.map((c) => (
                                 <TableRow key={c.id}>
                                     <TableCell className="font-medium">{c.nome}</TableCell>
-                                    <TableCell>{c.profiles?.full_name || "Desconhecido"}</TableCell>
+                                    <TableCell>{(c as any).sindico_name || "Desconhecido"}</TableCell>
                                     <TableCell className="text-xs">{c.endereco}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="icon">

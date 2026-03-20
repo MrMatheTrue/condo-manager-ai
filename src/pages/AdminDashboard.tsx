@@ -44,12 +44,13 @@ const AdminDashboard = () => {
     const { data: condominios } = useQuery({
         queryKey: ["admin-condos"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("condominios").select(`
-        *,
-        profiles:sindico_id(full_name)
-      `);
+            const { data, error } = await supabase.from("condominios").select("*");
             if (error) throw error;
-            return data;
+            // Fetch sindico names separately to avoid RLS join issues
+            const sindicoIds = [...new Set(data.map(c => c.sindico_id))];
+            const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", sindicoIds);
+            const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name]));
+            return data.map(c => ({ ...c, sindico_name: profileMap[c.sindico_id] || "Desconhecido" }));
         }
     });
 

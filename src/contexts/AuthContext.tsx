@@ -52,7 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (data) {
-        const p: Profile = { ...data, role: data.role ?? "sindico" };
+        const d = data as any;
+        const p: Profile = { id: d.id, full_name: d.full_name, email: d.email, phone: d.phone, avatar_url: d.avatar_url, role: d.role ?? "sindico" };
         setProfile(p);
         return p;
       }

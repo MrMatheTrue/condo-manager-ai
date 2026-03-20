@@ -130,7 +130,7 @@ const AdminDashboard = () => {
                                     <TableCell>{u.email}</TableCell>
                                     <TableCell>
                                         <Badge variant="secondary" className="capitalize">
-                                            {(u as any).user_roles?.[0]?.role || u.role || "sem cargo"}
+                                            {(u as any).role || "sem cargo"}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>{new Date(u.created_at).toLocaleDateString("pt-BR")}</TableCell>

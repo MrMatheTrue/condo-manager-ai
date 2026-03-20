@@ -103,7 +103,7 @@ const Configuracoes = () => {
                                 <div className="space-y-1">
                                     <p className="font-bold text-lg">{profile?.full_name || "Usuário"}</p>
                                     <p className="text-sm text-muted-foreground">{profile?.email}</p>
-                                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">{profile?.role}</span>
+                                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">{(profile as any)?.role}</span>
                                 </div>
                             </div>
 

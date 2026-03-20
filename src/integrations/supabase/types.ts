@@ -443,7 +443,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      app_role: "sindico" | "funcionario" | "zelador"
+      app_role: "sindico" | "funcionario" | "zelador" | "admin" | "colaborador"
       criticidade: "baixa" | "media" | "alta" | "critica"
       frequencia_tarefa: "diaria" | "semanal" | "mensal" | "personalizada"
       nivel_acesso: "total" | "leitura" | "tarefas_only"
@@ -581,7 +581,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["sindico", "funcionario", "zelador"],
+      app_role: ["sindico", "funcionario", "zelador", "admin", "colaborador"],
       criticidade: ["baixa", "media", "alta", "critica"],
       frequencia_tarefa: ["diaria", "semanal", "mensal", "personalizada"],
       nivel_acesso: ["total", "leitura", "tarefas_only"],

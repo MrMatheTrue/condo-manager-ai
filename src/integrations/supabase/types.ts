@@ -481,7 +481,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_condominio_access: {
+        Args: { cid: string; uid: string }
+        Returns: boolean
+      }
+      has_role: {
+        Args: { r: Database["public"]["Enums"]["app_role"]; uid: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "sindico" | "funcionario" | "zelador" | "admin" | "colaborador"
